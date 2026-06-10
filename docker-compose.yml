@@ -1,0 +1,73 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kimsha_postgres
+    environment:
+      POSTGRES_USER: kimsha
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: kimsha_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - kimsha_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kimsha -d kimsha_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: kimsha_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - kimsha_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kimsha:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kimsha_backend
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: development
+      APP_PORT: 8080
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: kimsha
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: kimsha_db
+      POSTGRES_SSL: disable
+      JWT_SECRET: change-this-in-production
+      JWT_EXPIRY: 24h
+      JWT_REFRESH_EXPIRY: 168h
+      CORS_ORIGINS: http://localhost:3000
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: kimsha-images
+      MINIO_USE_SSL: false
+      MINIO_PUBLIC_URL: http://localhost:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+volumes:
+  kimsha_pgdata:
+  kimsha_minio_data:
