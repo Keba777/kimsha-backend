@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: kimsha_db
     ports:
-      - "5432:5432"
+      - "5442:5432"
     volumes:
       - kimsha_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -62,6 +62,9 @@ services:
       MINIO_BUCKET: kimsha-images
       MINIO_USE_SSL: false
       MINIO_PUBLIC_URL: http://localhost:9000
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ALLOW_SELF_REGISTER: ${ALLOW_SELF_REGISTER}
     depends_on:
       postgres:
         condition: service_healthy

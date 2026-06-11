@@ -20,7 +20,7 @@ const (
 
 type User struct {
 	ID        uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	TenantID  uuid.UUID      `gorm:"type:uuid;not null;index" json:"tenant_id"`
+	TenantID  *uuid.UUID     `gorm:"type:uuid;index" json:"tenant_id"`
 	Tenant    Tenant         `gorm:"foreignKey:TenantID" json:"-"`
 	Name      string         `gorm:"not null" json:"name"`
 	NameAm    string         `json:"name_am"`

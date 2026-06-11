@@ -60,7 +60,7 @@ func main() {
 
 	admin := &models.User{
 		ID:       uuid.New(),
-		TenantID: uuid.Nil,
+		TenantID: nil,
 		Name:     "Super Admin",
 		Email:    cfg.Admin.Email,
 		Password: hashed,

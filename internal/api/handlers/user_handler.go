@@ -43,9 +43,10 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 	if in.PIN != "" {
 		pinHash, _ = password.Hash(in.PIN)
 	}
+	tid := tenantID(c)
 	u := &models.User{
 		ID:       uuid.New(),
-		TenantID: tenantID(c),
+		TenantID: &tid,
 		Name:     in.Name,
 		NameAm:   in.NameAm,
 		Email:    in.Email,

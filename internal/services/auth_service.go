@@ -62,7 +62,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 
 	user := &models.User{
 		ID:       uuid.New(),
-		TenantID: tenant.ID,
+		TenantID: &tenant.ID,
 		Name:     input.OwnerName,
 		Email:    input.Email,
 		Password: hashed,
@@ -89,7 +89,11 @@ func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 	}
 	_ = s.authRepo.UpdateLastLogin(user.ID)
 
-	token, err := jwt.Sign(user.ID, user.TenantID, string(user.Role), user.Name, s.expiry)
+	tenantID := uuid.Nil
+	if user.TenantID != nil {
+		tenantID = *user.TenantID
+	}
+	token, err := jwt.Sign(user.ID, tenantID, string(user.Role), user.Name, s.expiry)
 	if err != nil {
 		return nil, err
 	}

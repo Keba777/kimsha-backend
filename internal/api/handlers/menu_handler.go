@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"strconv"
+
 	"kimsha/internal/api/middleware"
+	"kimsha/internal/models"
 	"kimsha/internal/services"
 	"kimsha/pkg/jwt"
 	"kimsha/pkg/response"
@@ -11,9 +14,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type MenuHandler struct{ svc *services.MenuService }
+type MenuHandler struct {
+	svc        *services.MenuService
+	storageSvc *services.StorageService
+}
 
-func NewMenuHandler(svc *services.MenuService) *MenuHandler { return &MenuHandler{svc: svc} }
+func NewMenuHandler(svc *services.MenuService, storageSvc *services.StorageService) *MenuHandler {
+	return &MenuHandler{svc: svc, storageSvc: storageSvc}
+}
 
 func tenantID(c *fiber.Ctx) uuid.UUID {
 	claims := c.Locals(middleware.LocalsUserKey).(*jwt.Claims)
@@ -89,9 +97,9 @@ func (h *MenuHandler) ListItems(c *fiber.Ctx) error {
 }
 
 func (h *MenuHandler) CreateItem(c *fiber.Ctx) error {
-	var in services.ItemInput
-	if err := c.BodyParser(&in); err != nil {
-		return response.BadRequest(c, "invalid body")
+	in, err := h.parseItemForm(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
 	}
 	if errs := validator.Validate(in); errs != nil {
 		return c.Status(422).JSON(fiber.Map{"errors": errs})
@@ -120,15 +128,69 @@ func (h *MenuHandler) UpdateItem(c *fiber.Ctx) error {
 	if err != nil {
 		return response.BadRequest(c, "invalid id")
 	}
-	var in services.ItemInput
-	if err := c.BodyParser(&in); err != nil {
-		return response.BadRequest(c, "invalid body")
+	in, err := h.parseItemForm(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
 	}
 	item, err := h.svc.UpdateItem(id, tenantID(c), in)
 	if err != nil {
 		return response.NotFound(c, "item not found")
 	}
 	return response.OK(c, item)
+}
+
+// parseItemForm reads multipart form fields and an optional image file.
+func (h *MenuHandler) parseItemForm(c *fiber.Ctx) (services.ItemInput, error) {
+	var in services.ItemInput
+
+	in.Name = c.FormValue("name")
+	in.NameAm = c.FormValue("name_am")
+	in.Description = c.FormValue("description")
+	in.DescriptionAm = c.FormValue("description_am")
+	in.ImageURL = c.FormValue("image_url")
+
+	if raw := c.FormValue("price"); raw != "" {
+		p, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return in, fiber.NewError(fiber.StatusBadRequest, "invalid price")
+		}
+		in.Price = p
+	}
+	if raw := c.FormValue("prep_time_min"); raw != "" {
+		n, _ := strconv.Atoi(raw)
+		in.PrepTimeMin = n
+	}
+	if raw := c.FormValue("sort_order"); raw != "" {
+		n, _ := strconv.Atoi(raw)
+		in.SortOrder = n
+	}
+	in.IsFeatured = c.FormValue("is_featured") == "true"
+	in.IsAvailable = c.FormValue("is_available") != "false"
+
+	if t := c.FormValue("item_type"); t != "" {
+		in.ItemType = models.ItemType(t)
+	}
+	if raw := c.FormValue("category_id"); raw != "" {
+		if id, err := uuid.Parse(raw); err == nil {
+			in.CategoryID = &id
+		}
+	}
+
+	// Upload image if provided
+	if file, err := c.FormFile("image"); err == nil {
+		f, err := file.Open()
+		if err != nil {
+			return in, fiber.NewError(fiber.StatusInternalServerError, "could not read image")
+		}
+		defer f.Close()
+		url, err := h.storageSvc.UploadImage(f, file)
+		if err != nil {
+			return in, fiber.NewError(fiber.StatusInternalServerError, "image upload failed")
+		}
+		in.ImageURL = url
+	}
+
+	return in, nil
 }
 
 func (h *MenuHandler) DeleteItem(c *fiber.Ctx) error {

@@ -101,7 +101,7 @@ func (r *AdminRepository) CreateTenantWithOwner(tenant *models.Tenant, owner *mo
 		if err := tx.Create(tenant).Error; err != nil {
 			return err
 		}
-		owner.TenantID = tenant.ID
+		owner.TenantID = &tenant.ID
 		return tx.Create(owner).Error
 	})
 }
