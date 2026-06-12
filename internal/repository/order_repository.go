@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"time"
 
 	"kimsha/internal/models"
@@ -19,7 +20,12 @@ func (r *OrderRepository) List(tenantID uuid.UUID, status string, p pagination.P
 	var total int64
 	q := r.db.Where("tenant_id = ? AND deleted_at IS NULL", tenantID)
 	if status != "" {
-		q = q.Where("status = ?", status)
+		parts := strings.Split(status, ",")
+		if len(parts) == 1 {
+			q = q.Where("status = ?", parts[0])
+		} else {
+			q = q.Where("status IN ?", parts)
+		}
 	}
 	q.Model(&models.Order{}).Count(&total)
 	err := q.Preload("Table").Preload("Waiter").Preload("Items").

@@ -63,7 +63,37 @@ func (s *PaymentService) PayOrder(orderID, tenantID uuid.UUID, in PayOrderInput)
 	if order.TableID != nil {
 		_ = s.tableRepo.UpdateStatus(*order.TableID, tenantID, models.TableFree)
 	}
+
+	// For cash payments, record the sale in the cash register so the
+	// Cash page balance stays in sync with actual orders.
+	if in.Method == models.PaymentCash {
+		tableRef := "Takeaway"
+		if order.Table != nil {
+			tableRef = fmt.Sprintf("Table %d", order.Table.Number)
+		}
+		note := fmt.Sprintf("Order %s – %s", orderID.String()[:8], tableRef)
+		_ = s.recordCashSale(tenantID, in.CashierID, order.Total, note)
+	}
+
 	return payment, nil
+}
+
+// recordCashSale writes a 'sale' cash transaction and updates the running balance.
+func (s *PaymentService) recordCashSale(tenantID uuid.UUID, userID *uuid.UUID, amount float64, note string) error {
+	currentBalance, err := s.payRepo.TodayBalance(tenantID)
+	if err != nil {
+		currentBalance = 0
+	}
+	tx := &models.CashTransaction{
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		UserID:   userID,
+		Type:     "sale",
+		Amount:   amount,
+		Note:     note,
+		Balance:  currentBalance + amount,
+	}
+	return s.payRepo.CreateCashTx(tx)
 }
 
 func (s *PaymentService) List(tenantID uuid.UUID, from, to time.Time) ([]models.Payment, error) {
@@ -80,6 +110,21 @@ type CashTxInput struct {
 }
 
 func (s *PaymentService) CreateCashTx(tenantID uuid.UUID, in CashTxInput) (*models.CashTransaction, error) {
+	currentBalance, err := s.payRepo.TodayBalance(tenantID)
+	if err != nil {
+		currentBalance = 0
+	}
+
+	var newBalance float64
+	switch in.Type {
+	case "open", "in":
+		newBalance = currentBalance + in.Amount
+	case "close", "out":
+		newBalance = currentBalance - in.Amount
+	default:
+		newBalance = currentBalance
+	}
+
 	tx := &models.CashTransaction{
 		ID:       uuid.New(),
 		TenantID: tenantID,
@@ -87,6 +132,7 @@ func (s *PaymentService) CreateCashTx(tenantID uuid.UUID, in CashTxInput) (*mode
 		Type:     in.Type,
 		Amount:   in.Amount,
 		Note:     in.Note,
+		Balance:  newBalance,
 	}
 	return tx, s.payRepo.CreateCashTx(tx)
 }
