@@ -37,6 +37,12 @@ func (r *AuthRepository) FindUserByID(id uuid.UUID) (*models.User, error) {
 	return &u, err
 }
 
+func (r *AuthRepository) FindActiveUsersByTenant(tenantID uuid.UUID) ([]models.User, error) {
+	var users []models.User
+	err := r.db.Where("tenant_id = ? AND is_active = true AND pin != ''", tenantID).Find(&users).Error
+	return users, err
+}
+
 func (r *AuthRepository) UpdateLastLogin(userID uuid.UUID) error {
 	return r.db.Model(&models.User{}).Where("id = ?", userID).
 		Update("last_login", gorm.Expr("NOW()")).Error

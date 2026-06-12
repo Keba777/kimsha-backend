@@ -63,7 +63,12 @@ func Load() (*Config, error) {
 	_ = viper.ReadInConfig()
 
 	viper.SetDefault("APP_ENV", "development")
-	viper.SetDefault("APP_PORT", "8080")
+	// Railway injects PORT; fall back to 8080 for local dev
+	if port := viper.GetString("PORT"); port != "" {
+		viper.SetDefault("APP_PORT", port)
+	} else {
+		viper.SetDefault("APP_PORT", "8080")
+	}
 	viper.SetDefault("POSTGRES_HOST", "localhost")
 	viper.SetDefault("POSTGRES_PORT", "5432")
 	viper.SetDefault("POSTGRES_SSL", "disable")

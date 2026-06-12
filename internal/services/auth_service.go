@@ -106,11 +106,20 @@ func (s *AuthService) PINLogin(input PINLoginInput) (*AuthResponse, error) {
 		return nil, fmt.Errorf("tenant not found")
 	}
 
-	// PIN stored as bcrypt hash
-	users, err := s.authRepo.FindUserByEmail("") // placeholder — use pin lookup
-	_ = users
-	_ = tenant
-	_ = err
-	// Real implementation: look up by tenant + compare PIN hash
-	return nil, fmt.Errorf("pin login not yet implemented")
+	users, err := s.authRepo.FindActiveUsersByTenant(tenant.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PIN")
+	}
+
+	for _, u := range users {
+		if password.Compare(u.PIN, input.PIN) {
+			_ = s.authRepo.UpdateLastLogin(u.ID)
+			token, err := jwt.Sign(u.ID, tenant.ID, string(u.Role), u.Name, s.expiry)
+			if err != nil {
+				return nil, err
+			}
+			return &AuthResponse{Token: token, User: &u}, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid PIN")
 }
